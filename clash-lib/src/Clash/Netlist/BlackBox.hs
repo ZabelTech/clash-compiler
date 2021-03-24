@@ -25,6 +25,7 @@ import qualified Control.Lens                  as Lens
 import           Control.Monad                 (when, replicateM, zipWithM)
 import           Control.Monad.Extra           (concatMapM)
 import           Control.Monad.IO.Class        (liftIO)
+import           Data.Binary.IEEE754           (floatToWord, doubleToWord)
 import           Data.Char                     (ord)
 import           Data.Either                   (lefts, partitionEithers)
 import qualified Data.HashMap.Lazy             as HashMap
@@ -252,6 +253,14 @@ mkArgument bbName bndr nArg e = do
           return ((N.Literal (Just (Unsigned 64,64)) (N.NumLit i),hwTy,True),[])
         (C.Literal (NaturalLiteral n), [],_) ->
           return ((N.Literal (Just (Unsigned iw,iw)) (N.NumLit n),hwTy,True),[])
+        (C.Literal (FloatLiteral n), [], _) ->
+          let f = fromRational n
+              i = toInteger (floatToWord f)
+           in return ((N.Literal (Just (BitVector 32, 32)) (N.NumLit i), hwTy, True), [])
+        (C.Literal (DoubleLiteral n), [], _) ->
+          let d = fromRational n
+              i = toInteger (doubleToWord d)
+           in return ((N.Literal (Just (BitVector 64, 64)) (N.NumLit i), hwTy, True), [])
         (Prim pinfo,args,ticks) -> withTicks ticks $ \tickDecls -> do
           (e',d) <- mkPrimitive True False (NetlistId bndr ty) pinfo args tickDecls
           case e' of
