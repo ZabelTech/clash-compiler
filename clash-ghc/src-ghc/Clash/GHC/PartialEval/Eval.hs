@@ -67,6 +67,8 @@ import           Clash.Core.VarEnv
 import           Clash.Debug (debugIsOn, traceM)
 import           Clash.Driver.Types (Binding(..), IsPrim(..))
 
+import           Clash.GHC.PartialEval.Primitive.Bit
+import           Clash.GHC.PartialEval.Primitive.BitVector
 import           Clash.GHC.PartialEval.Primitive.ByteArray
 import           Clash.GHC.PartialEval.Primitive.Char
 import           Clash.GHC.PartialEval.Primitive.Double
@@ -350,7 +352,9 @@ evalPrimitive pr args = do
       pure (VNeutral (NePrim pr forcedArgs))
  where
   primitives = HashMap.unions
-    [ byteArrayPrims
+    [ bitPrims
+    , bitVectorPrims
+    , byteArrayPrims
     , charPrims
     , doublePrims
     , enumPrims
