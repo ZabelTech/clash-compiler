@@ -42,7 +42,6 @@ import           Clash.Core.Literal (Literal(..))
 import           Clash.Core.PartialEval.AsTerm
 import           Clash.Core.PartialEval.Monad
 import           Clash.Core.PartialEval.NormalForm
-import           Clash.Core.Subst (substTy)
 import           Clash.Core.Term
 import           Clash.Core.TermInfo
 import           Clash.Core.TyCon (tyConDataCons)
@@ -84,23 +83,16 @@ forceEval = forceEvalWith [] []
 forceEvalWith :: [(TyVar, Type)] -> [(Id, Value)] -> Value -> Eval Value
 forceEvalWith tvs ids = \case
   VThunk term env -> do
-    tvs' <- traverse (traverse evalType) tvs
+    tvs' <- traverse (bitraverse pure normTy) tvs
     setLocalEnv env (withTyVars tvs' . withIds ids $ eval term)
 
   value -> pure value
 
 delayArg :: Arg Term -> Eval (Arg Value)
-delayArg = bitraverse delayEval evalType
+delayArg = bitraverse delayEval normTy
 
 delayArgs :: Args Term -> Eval (Args Value)
 delayArgs = traverse delayArg
-
-evalType :: Type -> Eval Type
-evalType ty = do
-  tcm <- getTyConMap
-  subst <- getTvSubst
-
-  pure (normalizeType tcm (substTy subst ty))
 
 evalVar :: Id -> Eval Value
 evalVar i
@@ -109,16 +101,15 @@ evalVar i
 
 lookupLocal :: Id -> Eval Value
 lookupLocal i = do
-  var <- findId i
-  varTy <- evalType (varType i)
-  let i' = i { varType = varTy }
+  var <- normVarTy i
+  val <- findId var
 
-  case var of
-    Just x  -> do
+  case val of
+    Just x -> do
       workFree <- workFreeValue x
-      if workFree then forceEval x else pure (VNeutral (NeVar i'))
+      if workFree then forceEval x else pure (VNeutral (NeVar var))
 
-    Nothing -> pure (VNeutral (NeVar i'))
+    Nothing -> pure (VNeutral (NeVar var))
 
 lookupGlobal :: Id -> Eval Value
 lookupGlobal i = do
@@ -194,19 +185,17 @@ etaExpand term = do
 
 evalLam :: Id -> Term -> Eval Value
 evalLam i x = do
-  varTy <- evalType (varType i)
-  let i' = i { varType = varTy }
   env <- getLocalEnv
+  var <- normVarTy i
 
-  pure (VLam i' x env)
+  pure (VLam var x env)
 
 evalTyLam :: TyVar -> Term -> Eval Value
 evalTyLam i x = do
-  varTy <- evalType (varType i)
-  let i' = i { varType = varTy }
   env <- getLocalEnv
+  var <- normVarTy i
 
-  pure (VTyLam i' x env)
+  pure (VTyLam var x env)
 
 evalApp :: Term -> Arg Term -> Eval Value
 evalApp x y
@@ -261,10 +250,10 @@ evalLetrec bs x = do
     _  -> pure (VNeutral (NeLetrec keep eX))
  where
   evalBind (i, y) = do
-    iTy <- evalType (varType i)
+    var <- normVarTy i
     eY <- delayEval y
 
-    pure (i { varType = iTy }, eY)
+    pure (var, eY)
 
   evalScc (k, i) = \case
     AcyclicSCC y -> do
@@ -280,7 +269,7 @@ evalLetrec bs x = do
 evalCase :: Term -> Type -> [Alt] -> Eval Value
 evalCase term ty as = do
   subject <- delayEval term
-  resTy <- evalType ty
+  resTy <- normTy ty
   alts <- delayAlts as
 
   caseCon subject resTy alts
@@ -374,12 +363,10 @@ delayAlts = traverse (bitraverse delayPat delayEval)
  where
   delayPat = \case
     DataPat dc tvs ids -> do
-      tvsTys <- traverse evalType (fmap varType tvs)
-      idsTys <- traverse evalType (fmap varType ids)
+      tvs' <- traverse normVarTy tvs
+      let tys  = fmap (\tv -> (tv, VarTy tv)) tvs'
 
-      let setTy v ty = v { varType = ty }
-          tvs' = zipWith setTy tvs tvsTys
-          ids' = zipWith setTy ids idsTys
+      ids' <- withTyVars tys (traverse normVarTy ids)
 
       pure (DataPat dc tvs' ids')
 
@@ -394,8 +381,10 @@ data PatResult
 
 evalAlt :: Value -> PatResult -> Eval Value
 evalAlt def = \case
-  Match (_, val) tvs ids ->
-    forceEvalWith tvs ids val
+  Match (_, val) tvs ids -> do
+    tvs' <- traverse (bitraverse normVarTy pure) tvs
+    ids' <- withTyVars tvs' (traverse (bitraverse normVarTy pure) ids)
+    forceEvalWith tvs' ids' val
 
   NoMatch -> pure def
 
@@ -551,7 +540,7 @@ findBestAlt checkAlt =
       NoMatch -> go acc as
 
 evalCast :: Term -> Type -> Type -> Eval Value
-evalCast x a b = VCast <$> eval x <*> evalType a <*> evalType b
+evalCast x a b = VCast <$> eval x <*> normTy a <*> normTy b
 
 evalTick :: TickInfo -> Term -> Eval Value
 evalTick tick x = VTick <$> eval x <*> pure tick
@@ -565,6 +554,7 @@ apply val arg = do
   tcm <- getTyConMap
   forced <- forceEval val
   canApply <- workFreeValue arg
+  let argTy = valueType tcm arg
 
   case stripValue forced of
     -- If the LHS of application evaluates to a letrec, then add any bindings
@@ -575,7 +565,7 @@ apply val arg = do
           pure (VNeutral (NeLetrec bs inner))
 
       | otherwise -> do
-          varTy <- evalType (valueType tcm arg)
+          varTy <- normTy argTy
           var <- getUniqueId "workArg" varTy
           inner <- apply x (VNeutral (NeVar var))
           pure (VNeutral (NeLetrec ((var, arg) : bs) inner))
@@ -585,7 +575,7 @@ apply val arg = do
     VNeutral neu
       | canApply  -> pure (VNeutral (NeApp neu arg))
       | otherwise -> do
-          varTy <- evalType (valueType tcm arg)
+          varTy <- normTy argTy
           var <- getUniqueId "workArg" varTy
           let inner = VNeutral (NeApp neu (VNeutral (NeVar var)))
           pure (VNeutral (NeLetrec [(var, arg)] inner))
@@ -606,10 +596,10 @@ apply val arg = do
 
 applyTy :: Value -> Type -> Eval Value
 applyTy val ty = do
-  forcedVal <- forceEval val
-  argTy <- evalType ty
+  forced <- forceEval val
+  argTy <- normTy ty
 
-  case stripValue forcedVal of
+  case stripValue forced of
     VNeutral n ->
       pure (VNeutral (NeTyApp n argTy))
 
