@@ -67,7 +67,18 @@ import           Clash.Core.VarEnv
 import           Clash.Debug (debugIsOn, traceM)
 import           Clash.Driver.Types (Binding(..), IsPrim(..))
 
-import           Clash.GHC.PartialEval.Primitive.Info (resultType)
+import           Clash.GHC.PartialEval.Primitive.ByteArray
+import           Clash.GHC.PartialEval.Primitive.Char
+import           Clash.GHC.PartialEval.Primitive.Double
+import           Clash.GHC.PartialEval.Primitive.Enum
+import           Clash.GHC.PartialEval.Primitive.Float
+import           Clash.GHC.PartialEval.Primitive.GhcMisc
+import           Clash.GHC.PartialEval.Primitive.Info
+import           Clash.GHC.PartialEval.Primitive.Int
+import           Clash.GHC.PartialEval.Primitive.Integer
+import           Clash.GHC.PartialEval.Primitive.Narrowing
+import           Clash.GHC.PartialEval.Primitive.Natural
+import           Clash.GHC.PartialEval.Primitive.Word
 
 -- | Evaluate a term to WHNF.
 --
@@ -338,7 +349,19 @@ evalPrimitive pr args = do
       forcedArgs <- forceArgs args
       pure (VNeutral (NePrim pr forcedArgs))
  where
-  primitives = HashMap.empty
+  primitives = HashMap.unions
+    [ byteArrayPrims
+    , charPrims
+    , doublePrims
+    , enumPrims
+    , floatPrims
+    , ghcPrims
+    , intPrims
+    , integerPrims
+    , narrowingPrims
+    , naturalPrims
+    , wordPrims
+    ]
 
 {-
 NOTE [Evaluating primitives]
