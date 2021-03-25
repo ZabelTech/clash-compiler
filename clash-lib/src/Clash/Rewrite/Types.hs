@@ -37,7 +37,6 @@ import qualified Data.Set                    as Set
 import GHC.Generics
 
 import Clash.Core.PartialEval as PE          (Evaluator)
-import Clash.Core.PartialEval.NormalForm     (Value)
 import Clash.Core.Evaluator.Types as WHNF    (Evaluator, PrimHeap)
 
 import Clash.Core.Term           (Term, Context)
