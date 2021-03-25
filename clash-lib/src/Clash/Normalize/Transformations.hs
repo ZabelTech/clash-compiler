@@ -2092,8 +2092,11 @@ reduceBinders !subst processed ((i,substTm "reduceBinders" subst -> e):rest)
 reduceConst :: HasCallStack => NormRewrite
 reduceConst ctx e@(App _ _)
   | (Prim p0, _) <- collectArgs e
+--, isConstant e
   = whnfRW False ctx e $ \_ctx1 e1 -> case e1 of
       (collectArgs -> (Prim p1, _)) | primName p0 == primName p1 -> return e
+      (collectArgs -> (Lam{}, _)) -> return e
+      (collectArgs -> (TyLam{}, _)) -> return e
       _ -> changed e1
 
 reduceConst _ e = return e
