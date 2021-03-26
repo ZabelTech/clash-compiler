@@ -61,9 +61,13 @@ module Clash.Normalize.Transformations
   , xOptimize
   , setupMultiResultPrim
   , inlineSimIO
+
+  -- experimental
+  , partialEval
   )
 where
 
+import           Control.Concurrent.Supply   (splitSupply)
 import           Control.Exception           (throw)
 import           Control.Lens                ((^.),_1,_2)
 import qualified Control.Lens                as Lens
@@ -90,6 +94,7 @@ import           GHC.Num.Integer             (Integer (..))
 #else
 import           GHC.Integer.GMP.Internals   (Integer (..), BigNat (..))
 #endif
+import           System.IO.Unsafe            (unsafePerformIO)
 import           TextShow                    (TextShow(showt))
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -108,6 +113,9 @@ import           Clash.Core.FreeVars
    typeFreeVars, localVarsDoNotOccurIn, localIdDoesNotOccurIn,
    countFreeOccurances)
 import           Clash.Core.Literal          (Literal (..))
+import           Clash.Core.PartialEval
+import           Clash.Core.PartialEval.AsTerm
+import           Clash.Core.PartialEval.NormalForm
 import           Clash.Core.Pretty           (PrettyOptions(..), showPpr, showPpr')
 import           Clash.Core.Subst
 import           Clash.Core.Term
@@ -150,6 +158,29 @@ import           Clash.Rewrite.Util
 import           Clash.Unique
 import           Clash.Util
 import qualified Clash.Util.Interpolate as I
+
+partialEval :: NormRewrite
+partialEval (TransformContext is0 _) e = do
+  (heap,addr) <- Lens.use globalHeap
+  fun <- Lens.use curFun
+  ids <- Lens.use uniqSupply
+  bndrs <- Lens.use bindings
+  tcm <- Lens.view tcCache
+  fuel <- Lens.view fuelLimit
+  eval <- Lens.view peEvaluator
+
+  let (ids1, ids2) = splitSupply ids
+  let genv = mkGlobalEnv bndrs tcm ids1 fuel mempty addr
+
+  uniqSupply Lens..= ids2
+
+  case unsafePerformIO (nf eval genv is0 (fst fun) e) of
+    (!e', !genv') -> do
+      let tmHeap = fmap asTerm (genvHeap genv')
+
+      -- If partial eval changes a heap value, prefer the new value
+      globalHeap Lens..= (tmHeap <> heap, genvAddr genv')
+      changed e'
 
 inlineOrLiftNonRep :: HasCallStack => NormRewrite
 inlineOrLiftNonRep ctx eLet@(Letrec _ body) =
