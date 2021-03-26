@@ -436,6 +436,22 @@ undefinedTm =
   let undefinedNm = "Clash.Transformations.undefined" in
   TyApp (Prim (PrimInfo undefinedNm  undefinedTy WorkNever SingleResult))
 
+undefinedPrims :: [T.Text]
+undefinedPrims =
+  [ "Clash.Transformations.undefined"
+  , "Clash.XException.errorX"
+  , "Control.Exception.Base.absentError"
+  , "Control.Exception.Base.patError"
+  , "EmptyCase"
+  , "GHC.Err.error"
+  , "GHC.Err.errorWithoutStackTrace"
+  , "GHC.Err.undefined"
+  , "GHC.Real.divZeroError"
+  , "GHC.Real.overflowError"
+  , "GHC.Real.ratioZeroDenominatorError"
+  , "GHC.Real.underflowError"
+  ]
+
 substArgTys
   :: DataCon
   -> [Type]
