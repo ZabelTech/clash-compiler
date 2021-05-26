@@ -1134,6 +1134,11 @@ instance KnownNat n => SaturatingNum (BitVector n) where
     in  if msb# r == low
            then truncateB# r
            else minBound#
+  satAdd SatError a b =
+    let r = plus# a b
+     in  if msb# r == low
+           then truncateB# r
+           else undefined#
   satAdd _ a b =
     let r  = plus# a b
     in  if msb# r == low
@@ -1141,6 +1146,11 @@ instance KnownNat n => SaturatingNum (BitVector n) where
            else maxBound#
 
   satSub SatWrap a b = a -# b
+  satSub SatError a b =
+    let r = minus# a b
+    in  if msb# r == low
+           then truncateB# r
+           else undefined#
   satSub _ a b =
     let r = minus# a b
     in  if msb# r == low
@@ -1154,6 +1164,12 @@ instance KnownNat n => SaturatingNum (BitVector n) where
     in  case rL of
           0 -> rR
           _ -> minBound#
+  satMul SatError a b =
+    let r       = times# a b
+        (rL,rR) = split# r
+    in  case rL of
+          0 -> rR
+          _ -> undefined#
   satMul _ a b =
     let r       = times# a b
         (rL,rR) = split# r
