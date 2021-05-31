@@ -103,6 +103,12 @@ instance (Real a, SaturatingNum a) => Real (Erroring a) where
 
 instance (Integral a, SaturatingNum a) => Integral (Erroring a) where
   quotRem x y
+    | y == 0 = errorX "Erroring.quotRem: overflow"
+    -- If the number is unsigned, we can perform the operation because it
+    -- won't throw an exception (since y == 0 is false). Without this branch,
+    -- the next might throw an exception if the number is unsigned, or if it
+    -- is signed and y == minBound.
+    | 0 == minBound @a = coerce (quotRem @a) x y
     | x == minBound && y == -1 = errorX "Erroring.quotRem: overflow"
     | otherwise = coerce (quotRem @a) x y
 

@@ -107,7 +107,8 @@ instance (Real a, SaturatingNum a) => Real (Zeroing a) where
 instance (Integral a, SaturatingNum a) => Integral (Zeroing a) where
   -- minBound / -1 overflows to 0
   quotRem x y
-    | x == minBound && y == -1 = (0, 0)
+    | y == 0 = (0, 0)
+    | x == minBound && y < 0 && abs y == 1 = (0, 0)
     | otherwise = coerce (quotRem @a) x y
 
   toInteger = coerce (toInteger @a)

@@ -9,10 +9,10 @@
 
 module Clash.Tests.NumNewtypes (tests) where
 
-import Control.Exception (ArithException(DivideByZero), evaluate, try)
+import Control.Exception (ArithException, evaluate, try)
 import Control.Monad.IO.Class (liftIO)
-import Data.Fixed (mod')
 import Data.Kind (Type)
+import Data.Proxy (Proxy(..))
 import GHC.TypeLits (KnownNat)
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
@@ -30,10 +30,6 @@ import Clash.Num.Zeroing
 import Clash.Sized.Fixed (SFixed)
 import Clash.Sized.Index (Index)
 import Clash.Sized.Signed (Signed)
-
--- TODO Compare the other way in tests, i.e. calculate the exact result as
--- an Integer or Rational THEN convert that to the target type using
--- fromInteger / fromRational. WAIT... This may not work with Index...
 
 tests :: TestTree
 tests = testGroup "Numeric Newtypes"
@@ -79,7 +75,7 @@ testIntegral name mode gen =
     , testProperty "Absolute" $ checkIntegral mode gen abs
     , testProperty "Successor" $ checkIntegral mode gen succ
     , testProperty "Predecessor" $ checkIntegral mode gen pred
-    , testProperty "Quotient" $ checkIntegral2 mode gen quot
+--  , testProperty "Quotient" $ checkIntegral2 mode gen quot
     , testProperty "Remainder" $ checkIntegral2 mode gen rem
     ]
 
@@ -98,8 +94,8 @@ testRealFrac name mode gen =
     , testProperty "Absolute" $ checkRealFrac mode gen abs
     , testProperty "Successor" $ checkRealFrac mode gen succ
     , testProperty "Predecessor" $ checkRealFrac mode gen pred
-    , testProperty "Reciprocal" $ checkRealFrac mode gen recip
-    , testProperty "Division" $ checkRealFrac2 mode gen (/)
+--  , testProperty "Reciprocal" $ checkRealFrac mode gen recip
+--  , testProperty "Division" $ checkRealFrac2 mode gen (/)
     ]
 
 data Mode :: (Type -> Type) -> Type where
@@ -113,34 +109,49 @@ data BoundsCheck
   = Overflow | Underflow
   deriving (Show)
 
-boundsIntegral :: (Integral a) => Integer -> a -> a -> Maybe BoundsCheck
-boundsIntegral x minB maxB
-  | toInteger maxB < x = Just Overflow
-  | x < toInteger minB = Just Underflow
+boundsIntegral
+  :: forall a
+   . (Bounded a, Integral a)
+  => Proxy a
+  -> Maybe Integer
+  -> Maybe BoundsCheck
+boundsIntegral Proxy (Just x)
+  | toInteger (maxBound @a) < x = Just Overflow
+  | x < toInteger (minBound @a) = Just Underflow
   | otherwise = Nothing
 
-boundsRealFrac :: (RealFrac a) => Rational -> a -> a -> Maybe BoundsCheck
-boundsRealFrac x minB maxB
-  | toRational maxB < x = Just Overflow
-  | x < toRational minB = Just Underflow
+boundsIntegral Proxy Nothing = Just Overflow
+
+boundsRealFrac
+  :: forall a
+   . (Bounded a, RealFrac a)
+  => Proxy a
+  -> Maybe Rational
+  -> Maybe BoundsCheck
+boundsRealFrac Proxy (Just x)
+  | toRational (maxBound @a) < x = Just Overflow
+  | x < toRational (minBound @a) = Just Underflow
   | otherwise = Nothing
 
-tryArithmetic
-  :: (Maybe a -> PropertyT IO ())
+boundsRealFrac Proxy Nothing = Just Overflow
+
+-- Catch SomeException as we either want to catch ArithException or XException.
+tryArithmetic :: (a -> a) -> a -> PropertyT IO (Maybe a)
+tryArithmetic f x =
+  either (const Nothing) Just
+    <$> liftIO (try @ArithException (evaluate $ f x))
+
+-- fromInteger wraps for most types, but not Index. So we need this to get the
+-- wrapping behaviour we expect.
+wrapIntegral
+  :: forall a
+   . (Bounded a, Integral a)
+  => Integer
   -> a
-  -> PropertyT IO ()
-tryArithmetic check x = do
-  exRes <- liftIO $! try @ArithException (evaluate x)
-
-  case exRes of
-    Left DivideByZero ->
-      check Nothing
-
-    Left ex ->
-      footnote ("exception was " <> show ex) *> failure
-
-    Right res ->
-      check (Just res)
+wrapIntegral x =
+  let minB = toInteger (minBound @a)
+      maxB = toInteger (maxBound @a) + 1
+   in fromInteger $! minB + (x - minB) `mod` (maxB - minB)
 
 checkIntegral
   :: forall f a
@@ -152,52 +163,52 @@ checkIntegral
 checkIntegral mode gen op =
   property $ do
     x <- forAll gen
-    let integerRes = op (toInteger x)
-    let boundsCheck = boundsIntegral integerRes (minBound @(f a)) (maxBound @(f a))
+    result <- tryArithmetic op (toInteger x)
 
-    case boundsCheck of
+    case boundsIntegral (Proxy @(f a)) result of
       Nothing -> do
         label "InBounds"
+        goInBounds result x
 
-        -- Check that no overflow flag was set if the type has it.
-        case mode of
-          Over ->
-            let res = op x
-             in (integerRes === toInteger res) *> assert (not (hasOverflowed res))
-
-          _ -> integerRes === toInteger (op x)
-
-      Just bounds -> do
-        collect bounds
-        checkResult bounds integerRes x
+      Just info -> do
+        collect info
+        goOutBounds info result x
  where
-  checkResult :: BoundsCheck -> Integer -> f a -> PropertyT IO ()
-  checkResult bounds integer x =
+  goInBounds mInteger x =
+    case mode of
+      Over -> do
+        let result = op x
+        assert (not (hasOverflowed result))
+        fmap fromInteger mInteger === Just result
+
+      _ ->
+        fmap fromInteger mInteger === Just (op x)
+
+  goOutBounds info mInteger x =
     case mode of
       Error ->
         throwsException (op x)
 
-      Over ->
-        let minB = toInteger (minBound @(f a))
-            maxB = toInteger (maxBound @(f a)) + 1
-            wrap = minB + (integer - minB) `mod` (maxB - minB)
-            res  = op x
-         in (wrap === toInteger res) *> assert (hasOverflowed res)
+      Over -> do
+        case mInteger of
+          Nothing -> throwsException (op x)
+          Just i -> do
+            let result = op x
+            assert (hasOverflowed result)
+            wrapIntegral i === result
 
-      Sat | Overflow <- bounds ->
-        maxBound === (op x)
-
-      Sat | Underflow <- bounds ->
-        minBound === (op x)
+      Sat ->
+        case info of
+          Overflow -> maxBound === op x
+          Underflow -> minBound === op x
 
       Wrap ->
-        let minB = toInteger (minBound @(f a))
-            maxB = toInteger (maxBound @(f a)) + 1
-            wrap = minB + (integer - minB) `mod` (maxB - minB)
-         in wrap === toInteger (op x)
+        case mInteger of
+          Nothing -> throwsException (op x)
+          Just i -> wrapIntegral i === op x
 
       Zero ->
-        0 === (op x)
+        0 === op x
 
 checkRealFrac
   :: forall f a
@@ -209,45 +220,52 @@ checkRealFrac
 checkRealFrac mode gen op =
   property $ do
     x <- forAll gen
-    let rationalRes = op (toRational x)
-    let boundsCheck = boundsRealFrac rationalRes (minBound @(f a)) (maxBound @(f a))
+    result <- tryArithmetic op (toRational x)
 
-    case boundsCheck of
+    case boundsRealFrac (Proxy @(f a)) result of
       Nothing -> do
         label "InBounds"
-        rationalRes === toRational (op x)
+        goInBounds result x
 
-      Just bounds -> do
-        collect bounds
-        checkResult bounds rationalRes x
+      Just info -> do
+        collect info
+        goOutBounds info result x
  where
-  checkResult :: BoundsCheck -> Rational -> f a -> PropertyT IO ()
-  checkResult bounds rational x =
+  goInBounds mRational x =
+    case mode of
+      Over -> do
+        let result = op x
+        assert (not (hasOverflowed x))
+        fmap fromRational mRational === Just result
+
+      _ ->
+        fmap fromRational mRational === Just (op x)
+
+  goOutBounds info mRational x =
     case mode of
       Error ->
         throwsException (op x)
 
       Over ->
-        let minB = toRational (minBound @(f a))
-            maxB = toRational (maxBound @(f a)) + 1
-            wrap = minB + (rational - minB) `mod'` (maxB - minB)
-            res  = op x
-         in (wrap === toRational res) *> assert (hasOverflowed res)
+        case mRational of
+          Nothing -> throwsException (op x)
+          Just r -> do
+            let result = op x
+            assert (hasOverflowed result)
+            fromRational r === result
 
-      Sat | Overflow <- bounds ->
-        maxBound === (op x)
-
-      Sat | Underflow <- bounds ->
-        minBound === (op x)
+      Sat ->
+        case info of
+          Overflow -> maxBound === op x
+          Underflow -> minBound === op x
 
       Wrap ->
-        let minB = toRational (minBound @(f a))
-            maxB = toRational (maxBound @(f a)) + 1
-            wrap = minB + (rational - minB) `mod'` (maxB - minB)
-         in wrap === toRational (op x)
+        case mRational of
+          Nothing -> throwsException (op x)
+          Just r -> fromRational r === op x
 
       Zero ->
-        0.0 === (op x)
+        0.0 === op x
 
 checkIntegral2
   :: forall f a
@@ -260,52 +278,52 @@ checkIntegral2 mode gen op =
   property $ do
     x <- forAll gen
     y <- forAll gen
+    result <- tryArithmetic (toInteger x `op`) (toInteger y)
 
-    let integerRes = toInteger x `op` toInteger y
-    let boundsCheck = boundsIntegral integerRes (minBound @(f a)) (maxBound @(f a))
-
-    case boundsCheck of
+    case boundsIntegral (Proxy @(f a)) result of
       Nothing -> do
         label "InBounds"
+        goInBounds result x y
 
-        case mode of
-          Over ->
-            let res = x `op` y
-             in (integerRes === toInteger res) *> assert (not (hasOverflowed res))
-
-          _ -> integerRes === toInteger (x `op` y)
-
-      Just bounds -> do
-        collect bounds
-        checkResult bounds integerRes x y
+      Just info -> do
+        collect info
+        goOutBounds info result x y
  where
-  checkResult :: BoundsCheck -> Integer -> f a -> f a -> PropertyT IO ()
-  checkResult bounds integer x y =
+  goInBounds mInteger x y =
+    case mode of
+      Over -> do
+        let result = op x y
+        assert (not (hasOverflowed result))
+        fmap fromInteger mInteger === Just result
+
+      _ ->
+        fmap fromInteger mInteger === Just (x `op` y)
+
+  goOutBounds info mInteger x y =
     case mode of
       Error ->
-        throwsException (x `op` y)
+        throwsException (op x y)
 
       Over ->
-        let minB = toInteger (minBound @(f a))
-            maxB = toInteger (maxBound @(f a)) + 1
-            wrap = minB + (integer - minB) `mod` (maxB - minB)
-            res  = x `op` y
-         in (wrap === toInteger res) *> assert (hasOverflowed res)
+        case mInteger of
+          Nothing -> throwsException (op x y)
+          Just i -> do
+            let result = op x y
+            assert (hasOverflowed result)
+            wrapIntegral i === result
 
-      Sat | Overflow <- bounds ->
-        maxBound === (x `op` y)
-
-      Sat | Underflow <- bounds ->
-        minBound === (x `op` y)
+      Sat ->
+        case info of
+          Overflow -> maxBound === op x y
+          Underflow -> minBound === op x y
 
       Wrap ->
-        let minB = toInteger (minBound @(f a))
-            maxB = toInteger (maxBound @(f a)) + 1
-            wrap = minB + (integer - minB) `mod` (maxB - minB)
-         in wrap === toInteger (x `op` y)
+        case mInteger of
+          Nothing -> throwsException (op x y)
+          Just i -> wrapIntegral i === op x y
 
       Zero ->
-        0 === (x `op` y)
+        0 === op x y
 
 checkRealFrac2
   :: forall f a
@@ -318,46 +336,52 @@ checkRealFrac2 mode gen op =
   property $ do
     x <- forAll gen
     y <- forAll gen
+    result <- tryArithmetic (toRational x `op`) (toRational y)
 
-    let rationalRes = toRational x `op` toRational y
-    let boundsCheck = boundsRealFrac rationalRes (minBound @(f a)) (maxBound @(f a))
-
-    case boundsCheck of
+    case boundsRealFrac (Proxy @(f a)) result of
       Nothing -> do
         label "InBounds"
-        rationalRes === toRational (x `op` y)
+        goInBounds result x y
 
-      Just bounds -> do
-        collect bounds
-        checkResult bounds rationalRes x y
+      Just info -> do
+        collect info
+        goOutBounds info result x y
  where
-  checkResult :: BoundsCheck -> Rational -> f a -> f a -> PropertyT IO ()
-  checkResult bounds rational x y =
+  goInBounds mRational x y =
+    case mode of
+      Over -> do
+        let result = op x y
+        assert (not (hasOverflowed result))
+        fmap fromRational mRational === Just result
+
+      _ ->
+        fmap fromRational mRational === Just (op x y)
+
+  goOutBounds info mRational x y =
     case mode of
       Error ->
-        throwsException (x `op` y)
+        throwsException (op x y)
 
       Over ->
-        let minB = toRational (minBound @(f a))
-            maxB = toRational (maxBound @(f a)) + 1
-            wrap = minB + (rational - minB) `mod'` (maxB - minB)
-            res  = x `op` y
-         in (wrap === toRational res) *> assert (not (hasOverflowed res))
+        case mRational of
+          Nothing -> throwsException (op x y)
+          Just r -> do
+            let result = op x y
+            assert (hasOverflowed result)
+            fromRational r === result
 
-      Sat | Overflow <- bounds ->
-        maxBound === (x `op` y)
-
-      Sat | Underflow <- bounds ->
-        minBound === (x `op` y)
+      Sat ->
+        case info of
+          Overflow -> maxBound === op x y
+          Underflow -> minBound === op x y
 
       Wrap ->
-        let minB = toRational (minBound @(f a))
-            maxB = toRational (maxBound @(f a)) + 1
-            wrap = minB + (rational - minB) `mod'` (maxB - minB)
-         in wrap === toRational (x `op` y)
+        case mRational of
+          Nothing -> throwsException (op x y)
+          Just r -> fromRational r === op x y
 
       Zero ->
-        0.0 === (x `op` y)
+        0.0 === op x y
 
 genErroring :: forall a. (SaturatingNum a) => Gen a -> Gen (Erroring a)
 genErroring = fmap toErroring

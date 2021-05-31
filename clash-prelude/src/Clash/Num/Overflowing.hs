@@ -5,6 +5,7 @@
 module Clash.Num.Overflowing
   ( Overflowing(fromOverflowing, hasOverflowed)
   , toOverflowing
+  , clearOverflow
   ) where
 
 import Prelude hiding (even, odd)
@@ -30,6 +31,9 @@ data Overflowing a = Overflowing
 
 toOverflowing :: a -> Overflowing a
 toOverflowing x = Overflowing x False
+
+clearOverflow :: Overflowing a -> Overflowing a
+clearOverflow x = x { hasOverflowed = False }
 
 instance (Eq a) => Eq (Overflowing a) where
   (==) = (==) `on` fromOverflowing
@@ -156,10 +160,8 @@ instance (Integral a, SaturatingNum a) => Integral (Overflowing a) where
     toInteger x
 
 instance (Fractional a, Ord a, SaturatingNum a) => Fractional (Overflowing a) where
-  recip x
-    -- Overflow when dividing by 0
-    | x == 0 = x { hasOverflowed = True }
-    | otherwise = x { fromOverflowing = recip (fromOverflowing x) }
+  recip x =
+    x { fromOverflowing = recip (fromOverflowing x) }
 
   fromRational i =
     Overflowing (fromRational i) False

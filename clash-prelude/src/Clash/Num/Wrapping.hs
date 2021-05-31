@@ -104,6 +104,8 @@ instance (Integral a, SaturatingNum a) => Integral (Wrapping a) where
 instance (Fractional a, SaturatingNum a) => Fractional (Wrapping a) where
   -- Assume the default behaviour is to wrap anyway.
   recip = coerce (recip @a)
+
+  -- TODO Fixed saturates in fromRational, so we can't assume wrapping here
   fromRational = coerce (fromRational @a)
 
 instance (RealFrac a, SaturatingNum a) => RealFrac (Wrapping a) where
