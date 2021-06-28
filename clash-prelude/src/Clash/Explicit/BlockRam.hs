@@ -432,7 +432,7 @@ import           Clash.Sized.Index      (Index)
 import           Clash.Sized.Vector     (Vec, replicate, iterateI)
 import qualified Clash.Sized.Vector     as CV
 import           Clash.XException
-  (maybeIsX, seqErrorX, NFDataX, deepErrorX, defaultSeqX, fromJustX, undefined, isX)
+  (maybeIsX, seqX, seqErrorX, NFDataX, deepErrorX, defaultSeqX, fromJustX, undefined, isX)
 
 {- $setup
 >>> :m -Clash.Prelude
