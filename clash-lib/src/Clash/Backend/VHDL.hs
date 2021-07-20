@@ -97,6 +97,8 @@ data VHDLState =
   , _undefValue :: Maybe (Maybe Int)
   , _productFieldNameCache :: HashMap (Maybe [TextS.Text], [HWType]) [TextS.Text]
   -- ^ Caches output of 'productFieldNames'.
+  , _enumNameCache :: HashMap HWType [TextS.Text]
+  -- ^ Cache for enum variant names.
   , _aggressiveXOptBB_ :: AggressiveXOptBB
   }
 
@@ -121,6 +123,7 @@ instance Backend VHDLState where
     , _hdlsyn=hdlsyn_
     , _undefValue=undefVal
     , _productFieldNameCache=mempty
+    , _enumNameCache=mempty
     , _aggressiveXOptBB_=xOpt
     }
   hdlKind         = const VHDL
@@ -138,6 +141,7 @@ instance Backend VHDLState where
     Vector {} -> pure UserType
     RTree {} -> pure UserType
     Product {} -> pure UserType
+    Sum {} -> pure UserType
 
     Clock {} -> pure SynonymType
     Reset {} -> pure SynonymType
@@ -145,7 +149,8 @@ instance Backend VHDLState where
     Index {} -> pure SynonymType
     CustomSP {} -> pure SynonymType
     SP {} -> pure SynonymType
-    Sum {} -> pure SynonymType
+    -- TODO This could possibly be changed to a VHDL enum as well, provided the
+    -- enum_encoding attribute behaves as desired in different tools
     CustomSum {} -> pure SynonymType
     CustomProduct {} -> pure SynonymType
 
@@ -319,6 +324,21 @@ selectProductField
   -> VHDLM Doc
 selectProductField fieldLabels fieldTypes fieldIndex =
   "_sel" <> int fieldIndex <> "_" <> productFieldName fieldLabels fieldTypes fieldIndex
+
+enumVariantName
+  :: HasCallStack
+  => HWType
+  -> Int
+  -> VHDLM Doc
+enumVariantName ty@(Sum _ vs) i = do
+  names <- makeCached ty enumNameCache (traverse variantName vs)
+  pure (PP.pretty (names !! i))
+ where
+  -- Make a basic identifier from the last part of a qualified name
+  variantName = fmap Id.toText . Id.makeBasic . snd . TextS.breakOnEnd "."
+
+enumVariantName _ _ =
+  error $ $(curLoc) ++ "enumVariantName called on non-enum type"
 
 -- | Generate VHDL for a Netlist component
 genVHDL
@@ -510,6 +530,13 @@ tyDec hwty = do
         indent 2 (vcat $ zipWithM (\x y -> x <+> colon <+> y <> semi) selNames selTys) <> line <>
       "end record" <> semi
 
+    Sum _ vs ->
+      let variantNames = traverse (enumVariantName hwty) [0..length vs - 1] in
+      "type" <+> tyName hwty
+             <+> "is"
+             <+> parens (hsep (punctuate comma variantNames))
+             <> semi
+
     -- Type aliases:
     Clock _           -> typAliasDec hwty
     Reset _           -> typAliasDec hwty
@@ -517,7 +544,6 @@ tyDec hwty = do
     Index _           -> typAliasDec hwty
     CustomSP _ _ _ _  -> typAliasDec hwty
     SP _ _            -> typAliasDec hwty
-    Sum _ _           -> typAliasDec hwty
     CustomSum _ _ _ _ -> typAliasDec hwty
     CustomProduct {}  -> typAliasDec hwty
 
@@ -660,6 +686,26 @@ funDec _ t@(Product _ labels elTys) = Just
     elTyFromSLV = forM (zip starts ends)
                        (\(s,e) -> "fromSLV" <>
                           parens ("islv" <> parens (int s <+> "to" <+> int e)))
+
+funDec _ t@(Sum _ _) = Just
+  ( "function" <+> "toSLV" <+> parens("value" <+> colon <+> "in" <+> qualTyName t) <+> "return std_logic_vector" <> semi <> line <>
+    "function" <+> "fromSLV" <+> parens ("slv" <+> colon <+> "in" <+> "std_logic_vector") <+> "return" <+> qualTyName t <> semi
+  , "function" <+> "toSLV" <+> parens ("value" <+> colon <+> "in" <+> qualTyName t) <+> "return std_logic_vector" <+> "is" <> line <>
+    "begin" <> line <>
+    indent 2
+      ( "return" <+> "std_logic_vector" <>
+        parens ("to_unsigned" <>
+          parens (qualTyName t <> "'pos(value)" <> comma <+> int (typeSize t))
+        )) <> semi <> line <>
+    "end" <> semi <> line <>
+    "function" <+> "fromSLV" <+> parens ("slv" <+> colon <+> "in" <+> "std_logic_vector") <+> "return" <+> qualTyName t <+> "is" <> line <>
+    "begin" <> line <>
+    indent 2
+      ( "return" <+> qualTyName t <> "'val" <>
+        parens ("to_integer" <>
+          parens ("unsigned" <> parens "slv"))) <> semi <> line <>
+    "end" <> semi
+  )
 
 funDec syn t@(Vector _ elTy) = Just
   ( "function" <+> "toSLV" <+> parens ("value : " <+> qualTyName t) <+> "return std_logic_vector" <> semi <> line <>
@@ -1112,6 +1158,7 @@ normaliseType hwty = case hwty of
   Vector _ _    -> hwty
   RTree _ _     -> hwty
   Product _ _ _ -> hwty
+  Sum _ _       -> hwty
 
   -- Simple types, for which a subtype (without qualifiers) will be made in VHDL:
   Clock _           -> Bit
@@ -1120,7 +1167,6 @@ normaliseType hwty = case hwty of
   Index _           -> Unsigned (typeSize hwty)
   CustomSP _ _ _ _  -> BitVector (typeSize hwty)
   SP _ _            -> BitVector (typeSize hwty)
-  Sum _ _           -> BitVector (typeSize hwty)
   CustomSum _ _ _ _ -> BitVector (typeSize hwty)
   CustomProduct {}  -> BitVector (typeSize hwty)
 
@@ -1207,6 +1253,9 @@ sizedQualTyNameErrValue t@(RTree n elTy)    = do
     _ -> qualTyName t <> "'" <>  parens (int 0 <+> "to" <+> int (2^n - 1) <+> rarrow <+> sizedQualTyNameErrValue elTy)
 sizedQualTyNameErrValue t@(Product _ _ elTys) =
   qualTyName t <> "'" <> tupled (mapM sizedQualTyNameErrValue elTys)
+sizedQualTyNameErrValue t@(Sum _ _)  =
+  -- No undefined / don't care for enums, so just set it to the first value
+  tyName t <> "'val" <> parens (int 0)
 sizedQualTyNameErrValue (Clock _)  = singularErrValue
 sizedQualTyNameErrValue (Reset _)  = singularErrValue
 sizedQualTyNameErrValue (Enable _) = singularErrValue
@@ -1508,6 +1557,7 @@ expr_ _ (DataCon ty@(Vector 1 elTy) _ [e])       = do
 expr_ _ e@(DataCon ty@(Vector _ elTy) _ [e1,e2]) = do
   syn <- Ap hdlSyn
   case syn of
+    -- When targeting Vivado, arrays must use std_logic_vector for elements.
     Vivado -> qualTyName ty <> "'" <> case vectorChain e of
       Just es -> align (tupled (mapM (toSLV elTy) es))
       Nothing -> parens ("std_logic_vector'" <> parens (toSLV elTy e1) <+> "&" <+> expr_ False e2)
@@ -1542,7 +1592,7 @@ expr_ _ (DataCon ty@(SP _ args) (DC (_,i)) es) = assignExpr
     assignExpr = "std_logic_vector'" <> parens (hcat $ punctuate " & " $ sequence (dcExpr:argExprs ++ extraArg))
 
 expr_ _ (DataCon ty@(Sum _ _) (DC (_,i)) []) =
-  expr_ False (dcToExpr ty i)
+  tyName ty <> "'" <> parens (enumVariantName ty i)
 expr_ _ (DataCon ty@(CustomSum _ _ _ tys) (DC (_,i)) []) =
   let (ConstrRepr' _ _ _ value _) = fst $ tys !! i in
   "std_logic_vector" <> parens ("to_unsigned" <> parens (int (fromIntegral value) <> comma <> int (typeSize ty)))
@@ -1616,11 +1666,13 @@ expr_ b (BlackBoxE _ libs imps inc bs bbCtx b') = do
 expr_ _ (DataTag Bool (Left id_)) = "tagToEnum" <> parens (pretty id_)
 expr_ _ (DataTag Bool (Right id_)) = "dataToTag" <> parens (pretty id_)
 
-expr_ _ (DataTag hty@(Sum _ _) (Left id_)) =
-  "std_logic_vector" <> parens ("resize" <> parens ("unsigned" <> parens ("std_logic_vector" <> parens (pretty id_)) <> "," <> int (typeSize hty)))
+expr_ _ (DataTag hty@(Sum _ _) (Left id_)) = do
+  nm <- Ap $ use modNm
+  pretty nm <> "_types.fromSLV" <> parens ("std_logic_vector" <> parens ("resize" <> parens ("unsigned" <> parens ("std_logic_vector" <> parens (pretty id_)) <> "," <> int (typeSize hty))))
 expr_ _ (DataTag (Sum _ _) (Right id_)) = do
   iw <- Ap $ use intWidth
-  "signed" <> parens ("std_logic_vector" <> parens ("resize" <> parens ("unsigned" <> parens (pretty id_) <> "," <> int iw)))
+  nm <- Ap $ use modNm
+  "signed" <> parens ("std_logic_vector" <> parens ("resize" <> parens ("unsigned" <> parens (pretty nm <> "_types.toSLV" <> parens (pretty id_)) <> "," <> int iw)))
 
 expr_ _ (DataTag (Product {}) (Right _))  = do
   iw <- Ap $ use intWidth
@@ -1656,10 +1708,11 @@ expr_ _ (ToBv topM hwty e) = do
                parens (qualTyName hwty <> "'" <> parens (expr_ False e))
     Just t  -> pretty t <> dot <> pretty t <> "_types" <> dot <> "toSLV" <> parens (expr_ False e)
 
-expr_ _ (FromBv topM _ e) = do
+expr_ _ (FromBv topM hwty e) = do
   nm <- Ap $ use modNm
-  maybe (pretty nm <> "_types" ) (\t -> pretty t <> dot <> pretty t <> "_types") topM <> dot <>
-    "fromSLV" <> parens (expr_ False e)
+  qualTyName hwty <> "'" <> parens
+    (maybe (pretty nm <> "_types" ) (\t -> pretty t <> dot <> pretty t <> "_types") topM <>
+     dot <> "fromSLV" <> parens (expr_ False e))
 
 expr_ _ e = error $ $(curLoc) ++ (show e) -- empty
 
@@ -1720,6 +1773,7 @@ exprLit _             l             = error $ $(curLoc) ++ "exprLit: " ++ show l
 
 patLit :: HWType -> Literal -> VHDLM Doc
 patLit Bit (NumLit i) = if i == 0 then "'0'" else "'1'"
+patLit hwty@(Sum _ _) (NumLit i) = tyName hwty <> "'" <> parens (enumVariantName hwty (fromInteger i))
 patLit hwTy (NumLit i) =
   let sz = conSize hwTy
   in  case sz `mod` 4 of
@@ -1788,7 +1842,9 @@ toSLV (BitVector _) e = expr_ True e
 toSLV (Signed _)   e = "std_logic_vector" <> parens (expr_ False e)
 toSLV (Unsigned _) e = "std_logic_vector" <> parens (expr_ False e)
 toSLV (Index _)    e = "std_logic_vector" <> parens (expr_ False e)
-toSLV (Sum _ _)    e = expr_ False e
+toSLV (Sum _ _)    e = do
+  nm <- Ap $ use modNm
+  pretty nm <> "_types.toSLV" <> parens (expr_ False e)
 toSLV (CustomSum _ _dataRepr size reprs) (DataCon _ (DC (_,i)) _) =
   let (ConstrRepr' _ _ _ value _) = fst $ reprs !! i in
   let unsigned = "to_unsigned" <> parens (int (fromIntegral value) <> comma <> int size) in
