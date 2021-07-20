@@ -1,0 +1,31 @@
+CHANGED: blockRam uses STArray as the underlying representation to improve simulation performance
+
+Before:
+benchmarking RAMs/blockRam# (100% writes)
+time                 44.25 μs   (44.02 μs .. 44.49 μs)
+                     1.000 R²   (0.999 R² .. 1.000 R²)
+mean                 44.31 μs   (44.13 μs .. 44.69 μs)
+std dev              840.6 ns   (476.8 ns .. 1.491 μs)
+variance introduced by outliers: 15% (moderately inflated)
+
+benchmarking RAMs/blockRam# (0% writes)
+time                 27.01 μs   (26.85 μs .. 27.17 μs)
+                     1.000 R²   (1.000 R² .. 1.000 R²)
+mean                 27.11 μs   (26.96 μs .. 27.37 μs)
+std dev              659.1 ns   (381.4 ns .. 1.139 μs)
+variance introduced by outliers: 24% (moderately inflated)
+
+After:
+benchmarking RAMs/blockRam# (100% writes)
+time                 24.47 μs   (24.20 μs .. 24.88 μs)
+                     0.997 R²   (0.992 R² .. 0.999 R²)
+mean                 24.67 μs   (24.32 μs .. 25.48 μs)
+std dev              1.739 μs   (879.5 ns .. 3.217 μs)
+variance introduced by outliers: 73% (severely inflated)
+
+benchmarking RAMs/blockRam# (0% writes)
+time                 22.54 μs   (22.40 μs .. 22.71 μs)
+                     0.999 R²   (0.998 R² .. 0.999 R²)
+mean                 23.41 μs   (23.13 μs .. 23.85 μs)
+std dev              1.154 μs   (815.8 ns .. 1.795 μs)
+variance introduced by outliers: 57% (severely inflated)
