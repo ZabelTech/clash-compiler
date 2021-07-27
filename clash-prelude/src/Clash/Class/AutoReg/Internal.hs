@@ -156,7 +156,7 @@ instance AutoReg a => AutoReg (Maybe a) where
      val = fromMaybe (deepErrorX "autoReg'.val") <$> input
      valInit = fromMaybe (deepErrorX "autoReg'.valInit") initVal
 
-     valR = autoReg clk rst (enable en tag) valInit val
+     valR = autoReg clk rst (andEnable en tag) valInit val
 
      createMaybe t v = case t of
        True -> Just v
