@@ -208,7 +208,8 @@ module Clash.Explicit.Signal
   , unsafeFromHighPolarity
   , unsafeFromLowPolarity
     -- * Basic circuit functions
-  , enable
+  , andEnable
+  , enable -- DEPRECATED
   , dflipflop
   , delay
   , delayMaybe
@@ -494,13 +495,23 @@ veryUnsafeSynchronizer t1 t2
 
 -- | Merge enable signal with signal of bools by applying the boolean AND
 -- operation.
+andEnable
+  :: Enable dom
+  -> Signal dom Bool
+  -> Enable dom
+andEnable e0 e1 =
+  toEnable (fromEnable e0 .&&. e1)
+{-# INLINE enable #-}
+
+-- | Merge enable signal with signal of bools by applying the boolean AND
+-- operation.
 enable
   :: Enable dom
   -> Signal dom Bool
   -> Enable dom
-enable e0 e1 =
-  toEnable (fromEnable e0 .&&. e1)
-{-# INLINE enable #-}
+enable = andEnable
+{-# DEPRECATED enable
+  "Use 'andEnable' instead. This function will be removed in Clash 1.8." #-}
 
 -- | Special version of 'delay' that doesn't take enable signals of any kind.
 -- Initial value will be undefined.

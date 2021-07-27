@@ -149,7 +149,7 @@ module Clash.Signal
   , Enable
   , toEnable
   , fromEnable
-  , S.enableGen
+  , E.enableGen
     -- * Hidden clocks, resets and enables
     -- $hiddenclockandreset
 
@@ -194,7 +194,7 @@ module Clash.Signal
 #endif
   , SystemClockResetEnable
     -- * Basic circuit functions
-  , mergeEnable
+  , andEnable
   , dflipflop
   , delay
   , delayMaybe
@@ -274,7 +274,7 @@ import qualified Clash.Explicit.Signal as E
 import qualified Clash.Explicit.Reset  as E
 import           Clash.Explicit.Reset  (resetSynchronizer, resetGlitchFilter)
 import           Clash.Explicit.Signal (systemClockGen, systemResetGen)
-import qualified Clash.Explicit.Signal as S
+-- import qualified Clash.Explicit.Signal as S
 import           Clash.Hidden
 import           Clash.Promoted.Nat    (SNat (..), snatToNum)
 import           Clash.Signal.Bundle
@@ -1083,7 +1083,7 @@ hasEnable = fromLabel @(HiddenEnableName dom)
 
 -- | Merge enable signal with signal of bools by applying the boolean AND
 -- operation.
-mergeEnable
+andEnable
   :: forall dom r
    . KnownDomain dom
 #ifdef CLASH_MULTIPLE_HIDDEN
@@ -1092,16 +1092,16 @@ mergeEnable
   => Signal dom Bool
   -> (HiddenEnable dom => r)
   -> (HiddenEnable dom => r)
-mergeEnable = \en f -> mergeEnable0 hasEnable en f
+andEnable = \en f -> andEnable0 hasEnable en f
  where
-  mergeEnable0
+  andEnable0
     :: KnownDomain dom
     => Enable dom
     -> Signal dom Bool
     -> (HiddenEnable dom => r)
     -> r
-  mergeEnable0 gen en f =
-    let en0 = E.enable gen en
+  andEnable0 gen en f =
+    let en0 = E.andEnable gen en
     in withEnable en0 f
 
 -- | Expose a hidden 'Clock', 'Reset', and 'Enable' argument of a component, so
@@ -1540,7 +1540,7 @@ sample
   -- (and reset)
   -> [a]
 sample s =
-  S.sample (exposeClockResetEnable @dom s clockGen resetGen enableGen)
+  E.sample (exposeClockResetEnable @dom s clockGen resetGen enableGen)
 {-# NOINLINE sample #-}
 
 -- | Get a list of /n/ samples from a 'Signal'
@@ -1569,7 +1569,7 @@ sampleN
   -> [a]
 sampleN n s0 =
   let s1 = exposeClockResetEnable @dom s0 clockGen resetGen enableGen in
-  S.sampleN n s1
+  E.sampleN n s1
 {-# NOINLINE sampleN #-}
 
 -- | Get an infinite list of samples from a 'Signal', while asserting the reset
@@ -1590,7 +1590,7 @@ sampleWithReset
   -> [a]
 sampleWithReset nReset f0 =
   let f1 = exposeClockResetEnable f0 clockGen (resetGenN @dom nReset) enableGen in
-  drop (snatToNum nReset) (S.sample f1)
+  drop (snatToNum nReset) (E.sample f1)
 {-# NOINLINE sampleWithReset #-}
 
 -- | Get a list of /n/ samples from a 'Signal', while asserting the reset line
@@ -1635,7 +1635,7 @@ sample_lazy
   -- (and reset)
   -> [a]
 sample_lazy s =
-  S.sample_lazy (exposeClockResetEnable @dom s clockGen resetGen enableGen)
+  E.sample_lazy (exposeClockResetEnable @dom s clockGen resetGen enableGen)
 {-# NOINLINE sample_lazy #-}
 
 -- | Lazily get a list of /n/ samples from a 'Signal'
@@ -1660,7 +1660,7 @@ sampleN_lazy
   -- (and reset)
   -> [a]
 sampleN_lazy n s =
-  S.sampleN_lazy n (exposeClockResetEnable @dom s clockGen resetGen enableGen)
+  E.sampleN_lazy n (exposeClockResetEnable @dom s clockGen resetGen enableGen)
 {-# NOINLINE sampleN_lazy #-}
 
 -- * Simulation functions
@@ -1733,7 +1733,7 @@ simulateWithReset
   -> [a]
   -> [b]
 simulateWithReset n resetVal f as =
-  S.simulateWithReset n resetVal (exposeClockResetEnable f) as
+  E.simulateWithReset n resetVal (exposeClockResetEnable f) as
 {-# INLINE simulateWithReset #-}
 
 -- | Same as 'simulateWithReset', but only sample the first /Int/ output values.
@@ -1755,7 +1755,7 @@ simulateWithResetN
   -> [a]
   -> [b]
 simulateWithResetN nReset resetVal nSamples f as =
-  S.simulateWithResetN nReset resetVal nSamples (exposeClockResetEnable f) as
+  E.simulateWithResetN nReset resetVal nSamples (exposeClockResetEnable f) as
 {-# INLINE simulateWithResetN #-}
 
 
@@ -1778,7 +1778,7 @@ simulate_lazy
   -> [b]
 simulate_lazy f0 =
   let f1 = exposeClockResetEnable @dom f0 clockGen resetGen enableGen in
-  tail . S.simulate_lazy f1 . dup1
+  tail . E.simulate_lazy f1 . dup1
 {-# NOINLINE simulate_lazy #-}
 
 -- | Simulate a (@'Unbundled' a -> 'Unbundled' b@) function given a list of
@@ -1804,7 +1804,7 @@ simulateB
   -> [a]
   -> [b]
 simulateB f0 =
-  tail . S.simulateB f1 . dup1
+  tail . E.simulateB f1 . dup1
  where
   f1 =
     withSpecificClockResetEnable
@@ -1836,7 +1836,7 @@ simulateB_lazy
   -> [a]
   -> [b]
 simulateB_lazy f0 =
-  tail . S.simulateB_lazy f1 . dup1
+  tail . E.simulateB_lazy f1 . dup1
  where
   f1 =
     withSpecificClockResetEnable
@@ -1877,7 +1877,7 @@ unsafeSynchronizer
   => Signal dom1 a
   -> Signal dom2 a
 unsafeSynchronizer =
-  hideClock (hideClock S.unsafeSynchronizer)
+  hideClock (hideClock E.unsafeSynchronizer)
 #endif
 
 -- | Hold reset for a number of cycles relative to an implicit reset signal.
