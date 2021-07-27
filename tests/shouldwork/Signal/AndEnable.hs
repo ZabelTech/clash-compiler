@@ -1,4 +1,4 @@
-module MergeEnable where
+module AndEnable where
 
 import Clash.Prelude
 
@@ -17,7 +17,7 @@ topEntity clk rst en enM =
         => Signal dom Bool
         -> Signal dom (Unsigned 8)
         -> Signal dom (Unsigned 8, Unsigned 8)
-      f enM0 i = bundle (register 0 i, mergeEnable enM0 $ register 0 i)
+      f enM0 i = bundle (register 0 i, andEnable enM0 $ register 0 i)
   in withClockResetEnable clk rst en (f enM)
 
 testBench
