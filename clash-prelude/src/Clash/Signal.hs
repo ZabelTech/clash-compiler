@@ -195,6 +195,9 @@ module Clash.Signal
   , SystemClockResetEnable
     -- * Basic circuit functions
   , andEnable
+#ifdef CLASH_MULTIPLE_HIDDEN
+  , andSpecificEnable
+#endif
   , dflipflop
   , delay
   , delayMaybe
@@ -1095,14 +1098,31 @@ andEnable
 andEnable = \en f -> andEnable0 hasEnable en f
  where
   andEnable0
-    :: KnownDomain dom
-    => Enable dom
+    :: Enable dom
     -> Signal dom Bool
     -> (HiddenEnable dom => r)
     -> r
   andEnable0 gen en f =
     let en0 = E.andEnable gen en
     in withEnable en0 f
+
+andSpecificEnable
+  :: forall dom r
+   . ( HiddenEnable dom
+     , WithSpecificDomain dom r)
+  => Signal dom Bool
+  -> (HiddenEnable dom => r)
+  -> r
+andSpecificEnable = \en f -> andSpecificEnable0 hasEnable en f
+ where
+  andSpecificEnable0
+    :: Enable dom
+    -> Signal dom Bool
+    -> (HiddenEnable dom => r)
+    -> r
+  andSpecificEnable0 gen en f =
+    let en0 = E.andEnable gen en
+    in withSpecificEnable @dom en0 f
 
 -- | Expose a hidden 'Clock', 'Reset', and 'Enable' argument of a component, so
 -- it can be applied explicitly.
