@@ -1095,16 +1095,7 @@ andEnable
   => Signal dom Bool
   -> (HiddenEnable dom => r)
   -> r
-andEnable = \en f -> andEnable0 hasEnable en f
- where
-  andEnable0
-    :: Enable dom
-    -> Signal dom Bool
-    -> (HiddenEnable dom => r)
-    -> r
-  andEnable0 gen en f =
-    let en0 = E.andEnable gen en
-    in withEnable en0 f
+andEnable = \en f -> andSpecificEnable en (const f) (Proxy @dom)
 
 andSpecificEnable
   :: forall dom r
