@@ -1085,13 +1085,13 @@ hasEnable = fromLabel @(HiddenEnableName dom)
 -- operation.
 andEnable
   :: forall dom r
-   . KnownDomain dom
+   . HiddenEnable dom
 #ifdef CLASH_MULTIPLE_HIDDEN
   => WithSingleDomain dom r
 #endif
   => Signal dom Bool
   -> (HiddenEnable dom => r)
-  -> (HiddenEnable dom => r)
+  -> r
 andEnable = \en f -> andEnable0 hasEnable en f
  where
   andEnable0
