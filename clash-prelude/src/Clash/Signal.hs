@@ -150,7 +150,7 @@ module Clash.Signal
   , toEnable
   , fromEnable
   , E.enableGen
-    -- * Hidden clocks, resets and enables
+    -- * Hidden clock, reset, and enable arguments
     -- $hiddenclockandreset
 
     -- ** Hidden clock
@@ -495,45 +495,45 @@ type SystemClockResetEnable =
   , Hidden (HiddenEnableName System) (Enable System)
   )
 
--- | Expose a hidden 'Clock' argument of a component, so it can be applied
--- explicitly.
---
+{- | Expose a hidden 'Clock' argument of a component, so it can be applied
+explicitly.
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- This function can only be used on components with a single
--- domain. For example, this function will refuse when:
---
--- @
--- r ~ HiddenClock dom => Signal dom1 a -> Signal dom2 a
--- @
---
--- But will work when:
---
--- @
--- r ~ HiddenClock dom => Signal dom a -> Signal dom a
--- @
---
--- If you want to expose a clock of a component working on multiple domains
--- (such as the first example), use 'exposeSpecificClock'.
---
+This function can only be used on components with a single
+domain. For example, this function will refuse when:
+
+@
+r ~ HiddenClock dom1 => Signal dom1 a -> Signal dom2 a
+@
+
+But will work when:
+
+@
+r ~ HiddenClock dom => Signal dom a -> Signal dom a
+@
+
+If you want to expose a clock of a component working on multiple domains
+(such as the first example), use 'exposeSpecificClock'.
+
 #endif
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
--- === __Example__
--- Usage with a /polymorphic/ domain:
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = exposeClock reg clockGen
--- >>> sampleN @System 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Force exposeClock to work on System (hence 'sampleN' not needing an explicit
--- domain later):
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = exposeClock @System reg clockGen
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
+=== __Example__
+Usage with a /polymorphic/ domain:
+
+>>> reg = register 5 (reg + 1)
+>>> sig = exposeClock reg clockGen
+>>> sampleN @System 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Force 'exposeClock' to work on 'System' (hence 'sampleN' not needing an explicit
+domain later):
+
+>>> reg = register 5 (reg + 1)
+>>> sig = exposeClock @System reg clockGen
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+-}
 exposeClock
   :: forall dom  r
    .
@@ -547,31 +547,31 @@ exposeClock
 exposeClock = \f clk -> exposeSpecificClock (const f) clk (Proxy @dom)
 {-# INLINE exposeClock #-}
 
--- | Expose a hidden 'Clock' argument of a component, so it can be applied
--- explicitly. This function can be used on components with multiple domains.
--- As opposed to 'exposeClock', callers should explicitly state what the clock
--- domain is. See the examples for more information.
---
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
+{- | Expose a hidden 'Clock' argument of a component, so it can be applied
+explicitly. This function can be used on components with multiple domains.
+As opposed to 'exposeClock', callers should explicitly state what the clock
+domain is. See the examples for more information.
+
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- === __Example__
--- 'exposeSpecificClock' can only be used when it can find the specified domain
--- in /r/:
---
--- >>> reg = register @System 5 (reg + 1)
--- >>> sig = exposeSpecificClock @System reg clockGen
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Type variables work too, if they are in scope. For example:
---
--- @
--- reg = 'register' @@dom 5 (reg + 1)
--- sig = exposeSpecificClock @@dom reg 'clockGen'
--- @
+=== __Example__
+'exposeSpecificClock' can only be used when it can find the specified domain
+in /r/:
+
+>>> reg = register @System 5 (reg + 1)
+>>> sig = exposeSpecificClock @System reg clockGen
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Type variables work too, if they are in scope. For example:
+
+@
+reg = 'register' @@dom 5 (reg + 1)
+sig = 'exposeSpecificClock' @@dom reg 'clockGen'
+@
 #endif
---
+-}
 exposeSpecificClock
    :: forall dom  r
    . WithSpecificDomain dom r
@@ -594,44 +594,44 @@ hideClock
 hideClock = \f -> f (fromLabel @(HiddenClockName dom))
 {-# INLINE hideClock #-}
 
--- | Connect an explicit 'Clock' to a function with a hidden 'Clock'.
---
+{- | Connect an explicit 'Clock' to a function with a hidden 'Clock'.
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- This function can only be used on components with a single domain. For
--- example, this function will refuse when:
---
--- @
--- r ~ HiddenClock dom => Signal dom1 a -> Signal dom2 a
--- @
---
--- But will work when:
---
--- @
--- r ~ HiddenClock dom => Signal dom a -> Signal dom a
--- @
---
--- If you want to connect a clock to a component working on multiple domains
--- (such as the first example), use 'withSpecificClock'.
---
+This function can only be used on components with a single domain. For
+example, this function will refuse when:
+
+@
+r ~ HiddenClock dom1 => Signal dom1 a -> Signal dom2 a
+@
+
+But will work when:
+
+@
+r ~ HiddenClock dom => Signal dom a -> Signal dom a
+@
+
+If you want to connect a clock to a component working on multiple domains
+(such as the first example), use 'withSpecificClock'.
+
 #endif
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
--- === __Example__
--- Usage with a _polymorphic_ domain:
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = withClock clockGen reg
--- >>> sampleN @System 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Force withClock to work on signal (hence 'sampleN' not needing an explicit
--- domain later):
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = withClock @System clockGen reg
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
+=== __Example__
+Usage with a _polymorphic_ domain:
+
+>>> reg = register 5 (reg + 1)
+>>> sig = withClock clockGen reg
+>>> sampleN @System 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Force 'withClock' to work on 'System' (hence 'sampleN' not needing an explicit
+domain later):
+
+>>> reg = register 5 (reg + 1)
+>>> sig = withClock @System clockGen reg
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+-}
 withClock
   :: forall dom r
    .
@@ -649,7 +649,7 @@ withClock clk f = withSpecificClock clk (const f) (Proxy @dom)
 
 -- | Connect an explicit 'Clock' to a function with a hidden 'Clock'. This
 -- function can be used on components with multiple domains. As opposed to
--- 'exposeClock', callers should explicitly state what the clock domain is. See
+-- 'withClock', callers should explicitly state what the clock domain is. See
 -- the examples for more information.
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
@@ -657,7 +657,7 @@ withClock clk f = withSpecificClock clk (const f) (Proxy @dom)
 -- === __Example__
 -- 'withSpecificClock' can only be used when it can find the specified domain
 -- in /r/:
---
+-- TODO: Actually use 'withSpecificClock'
 -- >>> reg = register @System 5 (reg + 1)
 -- >>> sig = withClock @System clockGen reg
 -- >>> sampleN 10 sig
@@ -692,45 +692,45 @@ hasClock
 hasClock = fromLabel @(HiddenClockName dom)
 {-# INLINE hasClock #-}
 
--- | Expose a hidden 'Reset' argument of a component, so it can be applied
--- explicitly.
---
+{- | Expose a hidden 'Reset' argument of a component, so it can be applied
+explicitly.
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- This function can only be used on components with a single domain. For
--- example, this function will refuse when:
---
--- @
--- r ~ HiddenReset dom => Signal dom1 a -> Signal dom2 a
--- @
---
--- But will work when:
---
--- @
--- r ~ HiddenReset dom => Signal dom a -> Signal dom a
--- @
---
--- If you want to expose a reset of a component working on multiple domains
--- (such as the first example), use 'exposeSpecificReset'.
---
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
+This function can only be used on components with a single domain. For
+example, this function will refuse when:
+
+@
+r ~ HiddenReset dom1 => Signal dom1 a -> Signal dom2 a
+@
+
+But will work when:
+
+@
+r ~ HiddenReset dom => Signal dom a -> Signal dom a
+@
+
+If you want to expose a reset of a component working on multiple domains
+(such as the first example), use 'exposeSpecificReset'.
+
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
 #endif
--- === __Example__
--- Usage with a /polymorphic/ domain:
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = exposeReset reg resetGen
--- >>> sampleN @System 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Force exposeReset to work on System (hence 'sampleN' not needing an explicit
--- domain later):
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = exposeReset @System reg resetGen
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
+=== __Example__
+Usage with a /polymorphic/ domain:
+
+>>> reg = register 5 (reg + 1)
+>>> sig = exposeReset reg resetGen
+>>> sampleN @System 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Force 'exposeReset' to work on 'System' (hence 'sampleN' not needing an explicit
+domain later):
+
+>>> reg = register 5 (reg + 1)
+>>> sig = exposeReset @System reg resetGen
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+-}
 exposeReset
   :: forall dom r
    .
@@ -744,31 +744,31 @@ exposeReset
 exposeReset = \f rst -> exposeSpecificReset (const f) rst (Proxy @dom)
 {-# INLINE exposeReset #-}
 
--- | Expose a hidden 'Reset' argument of a component, so it can be applied
--- explicitly. This function can be used on components with multiple domains.
--- As opposed to 'exposeReset', callers should explicitly state what the reset
--- domain is. See the examples for more information.
---
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
+{- | Expose a hidden 'Reset' argument of a component, so it can be applied
+explicitly. This function can be used on components with multiple domains.
+As opposed to 'exposeReset', callers should explicitly state what the reset
+domain is. See the examples for more information.
+
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- === __Example__
--- 'exposeSpecificReset' can only be used when it can find the specified domain
--- in /r/:
---
--- >>> reg = register @System 5 (reg + 1)
--- >>> sig = exposeSpecificReset @System reg resetGen
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Type variables work too, if they are in scope. For example:
---
--- @
--- reg = 'register' @@dom 5 (reg + 1)
--- sig = exposeSpecificReset @@dom reg 'resetGen'
--- @
+=== __Example__
+'exposeSpecificReset' can only be used when it can find the specified domain
+in /r/:
+
+>>> reg = register @System 5 (reg + 1)
+>>> sig = exposeSpecificReset @System reg resetGen
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Type variables work too, if they are in scope. For example:
+
+@
+reg = 'register' @@dom 5 (reg + 1)
+sig = exposeSpecificReset @@dom reg 'resetGen'
+@
 #endif
---
+-}
 exposeSpecificReset
   :: forall dom r
    . WithSpecificDomain dom r
@@ -791,44 +791,44 @@ hideReset
 hideReset = \f -> f (fromLabel @(HiddenResetName dom))
 {-# INLINE hideReset #-}
 
--- | Connect an explicit 'Reset' to a function with a hidden 'Reset'.
---
+{- | Connect an explicit 'Reset' to a function with a hidden 'Reset'.
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- This function can only be used on components with a single domain. For
--- example, this function will refuse when:
---
--- @
--- r ~ HiddenReset dom => Signal dom1 a -> Signal dom2 a
--- @
---
--- But will work when:
---
--- @
--- r ~ HiddenReset dom => Signal dom a -> Signal dom a
--- @
---
--- If you want to connect a reset to a component working on multiple domains
--- (such as the first example), use 'withSpecificReset'.
---
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
+This function can only be used on components with a single domain. For
+example, this function will refuse when:
+
+@
+r ~ HiddenReset dom1 => Signal dom1 a -> Signal dom2 a
+@
+
+But will work when:
+
+@
+r ~ HiddenReset dom => Signal dom a -> Signal dom a
+@
+
+If you want to connect a reset to a component working on multiple domains
+(such as the first example), use 'withSpecificReset'.
+
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
 #endif
--- === __Example__
--- Usage with a _polymorphic_ domain:
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = withReset resetGen reg
--- >>> sampleN @System 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Force withReset to work on signal (hence 'sampleN' not needing an explicit
--- domain later):
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = withReset @System resetGen reg
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
+=== __Example__
+Usage with a /polymorphic/ domain:
+
+>>> reg = register 5 (reg + 1)
+>>> sig = withReset resetGen reg
+>>> sampleN @System 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Force 'withReset' to work on 'System' (hence 'sampleN' not needing an explicit
+domain later):
+
+>>> reg = register 5 (reg + 1)
+>>> sig = withReset @System resetGen reg
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+-}
 withReset
   :: forall dom r
    .
@@ -846,7 +846,7 @@ withReset = \rst f -> expose @(HiddenResetName dom) f rst
 
 -- | Connect an explicit 'Reset' to a function with a hidden 'Reset'. This
 -- function can be used on components with multiple domains. As opposed to
--- 'exposeReset', callers should explicitly state what the reset domain is. See
+-- 'withReset', callers should explicitly state what the reset domain is. See
 -- the examples for more information.
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
@@ -854,7 +854,7 @@ withReset = \rst f -> expose @(HiddenResetName dom) f rst
 -- === __Example__
 -- 'withSpecificReset' can only be used when it can find the specified domain
 -- in /r/:
---
+-- TODO: Actually use 'withSpecificReset'
 -- >>> reg = register @System 5 (reg + 1)
 -- >>> sig = withReset @System resetGen reg
 -- >>> sampleN 10 sig
@@ -889,45 +889,45 @@ hasReset
 hasReset = fromLabel @(HiddenResetName dom)
 {-# INLINE hasReset #-}
 
--- | Expose a hidden 'Enable' argument of a component, so it can be applied
--- explicitly.
---
+{- | Expose a hidden 'Enable' argument of a component, so it can be applied
+explicitly.
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- This function can only be used on components with a single domain. For
--- example, this function will refuse when:
---
--- @
--- r ~ HiddenEnable dom => Signal dom1 a -> Signal dom2 a
--- @
---
--- But will work when:
---
--- @
--- r ~ HiddenEnable dom => Signal dom a -> Signal dom a
--- @
---
--- If you want to expose a enable of a component working on multiple domains
--- (such as the first example), use 'exposeSpecificEnable'.
---
+This function can only be used on components with a single domain. For
+example, this function will refuse when:
+
+@
+r ~ HiddenEnable dom1 => Signal dom1 a -> Signal dom2 a
+@
+
+But will work when:
+
+@
+r ~ HiddenEnable dom => Signal dom a -> Signal dom a
+@
+
+If you want to expose a enable of a component working on multiple domains
+(such as the first example), use 'exposeSpecificEnable'.
+
 #endif
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
--- === __Example__
--- Usage with a /polymorphic/ domain:
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = exposeEnable reg enableGen
--- >>> sampleN @System 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Force exposeEnable to work on System (hence 'sampleN' not needing an explicit
--- domain later):
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = exposeEnable @System reg enableGen
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
+=== __Example__
+Usage with a /polymorphic/ domain:
+
+>>> reg = register 5 (reg + 1)
+>>> sig = exposeEnable reg enableGen
+>>> sampleN @System 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Force 'exposeEnable' to work on 'System' (hence 'sampleN' not needing an
+explicit domain later):
+
+>>> reg = register 5 (reg + 1)
+>>> sig = exposeEnable @System reg enableGen
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+-}
 exposeEnable
   :: forall dom  r .
 #ifdef CLASH_MULTIPLE_HIDDEN
@@ -940,31 +940,31 @@ exposeEnable
 exposeEnable = \f gen -> exposeSpecificEnable (const f) gen (Proxy @dom)
 {-# INLINE exposeEnable #-}
 
--- | Expose a hidden 'Enable' argument of a component, so it can be applied
--- explicitly. This function can be used on components with multiple domains.
--- As opposed to 'exposeEnable', callers should explicitly state what the enable
--- domain is. See the examples for more information.
---
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
+{- | Expose a hidden 'Enable' argument of a component, so it can be applied
+explicitly. This function can be used on components with multiple domains.
+As opposed to 'exposeEnable', callers should explicitly state what the enable
+domain is. See the examples for more information.
+
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- === __Example__
--- 'exposeSpecificEnable' can only be used when it can find the specified domain
--- in /r/:
---
--- >>> reg = register @System 5 (reg + 1)
--- >>> sig = exposeSpecificEnable @System reg enableGen
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Type variables work too, if they are in scope. For example:
---
--- @
--- reg = 'register' @@dom 5 (reg + 1)
--- sig = exposeSpecificEnable @@dom reg 'enableGen'
--- @
+=== __Example__
+'exposeSpecificEnable' can only be used when it can find the specified domain
+in /r/:
+
+>>> reg = register @System 5 (reg + 1)
+>>> sig = exposeSpecificEnable @System reg enableGen
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Type variables work too, if they are in scope. For example:
+
+@
+reg = 'register' @@dom 5 (reg + 1)
+sig = exposeSpecificEnable @@dom reg 'enableGen'
+@
 #endif
---
+-}
 exposeSpecificEnable
   :: forall dom r
    . WithSpecificDomain dom r
@@ -987,44 +987,44 @@ hideEnable
 hideEnable = \f -> f (fromLabel @(HiddenEnableName dom))
 {-# INLINE hideEnable #-}
 
--- | Connect an explicit 'Enable' to a function with a hidden 'Enable'.
---
+{- | Connect an explicit 'Enable' to a function with a hidden 'Enable'.
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- This function can only be used on components with a single domain. For
--- example, this function will refuse when:
---
--- @
--- r ~ HiddenEnable dom => Signal dom1 a -> Signal dom2 a
--- @
---
--- But will work when:
---
--- @
--- r ~ HiddenEnable dom => Signal dom a -> Signal dom a
--- @
---
--- If you want to connect a enable to a component working on multiple domains
--- (such as the first example), use 'withSpecificEnable'.
---
+This function can only be used on components with a single domain. For
+example, this function will refuse when:
+
+@
+r ~ HiddenEnable dom1 => Signal dom1 a -> Signal dom2 a
+@
+
+But will work when:
+
+@
+r ~ HiddenEnable dom => Signal dom a -> Signal dom a
+@
+
+If you want to connect a enable to a component working on multiple domains
+(such as the first example), use 'withSpecificEnable'.
+
 #endif
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
--- === __Example__
--- Usage with a _polymorphic_ domain:
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = withEnable enableGen reg
--- >>> sampleN @System 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Force withEnable to work on signal (hence 'sampleN' not needing an explicit
--- domain later):
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = withEnable @System enableGen reg
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
+=== __Example__
+Usage with a /polymorphic/ domain:
+
+>>> reg = register 5 (reg + 1)
+>>> sig = withEnable enableGen reg
+>>> sampleN @System 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Force 'withEnable' to work on 'System' (hence 'sampleN' not needing an explicit
+domain later):
+
+>>> reg = register 5 (reg + 1)
+>>> sig = withEnable @System enableGen reg
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+-}
 withEnable
   :: forall dom r
    . KnownDomain dom
@@ -1041,7 +1041,7 @@ withEnable = \gen f -> expose @(HiddenEnableName dom) f gen
 
 -- | Connect an explicit 'Enable' to a function with a hidden 'Enable'. This
 -- function can be used on components with multiple domains. As opposed to
--- 'exposeEnable', callers should explicitly state what the enable domain is. See
+-- 'withEnable', callers should explicitly state what the enable domain is. See
 -- the examples for more information.
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
@@ -1049,7 +1049,7 @@ withEnable = \gen f -> expose @(HiddenEnableName dom) f gen
 -- === __Example__
 -- 'withSpecificEnable' can only be used when it can find the specified domain
 -- in /r/:
---
+-- TODO: Actually use 'withSpecificEnable'
 -- >>> reg = register @System 5 (reg + 1)
 -- >>> sig = withEnable @System enableGen reg
 -- >>> sampleN 10 sig
@@ -1115,60 +1115,61 @@ andSpecificEnable = \en f -> andSpecificEnable0 hasEnable en f
     let en0 = E.andEnable gen en
     in withSpecificEnable @dom en0 f
 
--- | Expose a hidden 'Clock', 'Reset', and 'Enable' argument of a component, so
--- it can be applied explicitly.
---
+{- | Expose hidden 'Clock', 'Reset', and 'Enable' arguments of a component, so
+they can be applied explicitly.
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- This function can only be used on components with a single domain. For
--- example, this function will refuse when:
---
--- @
--- r ~ HiddenClockResetEnable dom => Signal dom1 a -> Signal dom2 a
--- @
---
--- But will work when:
---
--- @
--- r ~ HiddenClockResetEnable dom => Signal dom a -> Signal dom a
--- @
---
--- If you want to expose a clock, reset, and enable of a component working on
--- multiple domains (such as the first example), use 'exposeSpecificClockResetEnable'.
---
+This function can only be used on components with a single domain. For
+example, this function will refuse when:
+
+@
+r ~ HiddenClockResetEnable dom1 => Signal dom1 a -> Signal dom2 a
+@
+
+But will work when:
+
+@
+r ~ HiddenClockResetEnable dom => Signal dom a -> Signal dom a
+@
+
+If you want to expose a clock, reset, and enable of a component working on
+multiple domains (such as the first example), use 'exposeSpecificClockResetEnable'.
+
 #endif
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
--- === __Example__
--- Usage with a /polymorphic/ domain:
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = exposeClockResetEnable reg clockGen resetGen enableGen
--- >>> sampleN @System 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Force exposeClockResetEnable to work on System (hence 'sampleN' not needing an
--- explicit domain later):
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = exposeClockResetEnable @System reg clockGen resetGen enableGen
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Usage in a testbench context:
---
--- @
--- topEntity :: Vec 2 (Vec 3 (Unsigned 8)) -> Vec 6 (Unsigned 8)
--- topEntity = concat
---
--- testBench :: Signal System Bool
--- testBench = done
---   where
---     testInput      = pure ((1 :> 2 :> 3 :> Nil) :> (4 :> 5 :> 6 :> Nil) :> Nil)
---     expectedOutput = outputVerifier' ((1:>2:>3:>4:>5:>6:>Nil):>Nil)
---     done           = exposeClockResetEnable (expectedOutput (topEntity <$> testInput)) clk rst
---     clk            = tbSystemClockGen (not <\$\> done)
---     rst            = systemResetGen
--- @
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
+=== __Example__
+Usage with a /polymorphic/ domain:
+
+>>> reg = register 5 (reg + 1)
+>>> sig = exposeClockResetEnable reg clockGen resetGen enableGen
+>>> sampleN @System 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Force 'exposeClockResetEnable' to work on 'System' (hence 'sampleN' not needing
+an explicit domain later):
+
+>>> reg = register 5 (reg + 1)
+>>> sig = exposeClockResetEnable @System reg clockGen resetGen enableGen
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Usage in a testbench context:
+
+@
+topEntity :: Vec 2 (Vec 3 (Unsigned 8)) -> Vec 6 (Unsigned 8)
+topEntity = concat
+
+testBench :: Signal System Bool
+testBench = done
+  where
+    testInput      = pure ((1 :> 2 :> 3 :> Nil) :> (4 :> 5 :> 6 :> Nil) :> Nil)
+    expectedOutput = outputVerifier' ((1:>2:>3:>4:>5:>6:>Nil):>Nil)
+    done           = exposeClockResetEnable (expectedOutput (topEntity \<\$> testInput)) clk rst
+    clk            = tbSystemClockGen (not <\$\> done)
+    rst            = systemResetGen
+@
+-}
 exposeClockResetEnable
   :: forall dom r .
 #ifdef CLASH_MULTIPLE_HIDDEN
@@ -1184,11 +1185,10 @@ exposeClockResetEnable =
 {-# INLINE exposeClockResetEnable #-}
 
 #ifdef CLASH_MULTIPLE_HIDDEN
--- | Expose a hidden 'Clock', 'Reset', and 'Enable' argument of a component, so
--- it can be applied explicitly. This function can be used on components with
+-- | Expose hidden 'Clock', 'Reset', and 'Enable' arguments of a component, so
+-- they can be applied explicitly. This function can be used on components with
 -- multiple domains. As opposed to 'exposeClockResetEnable', callers should
--- explicitly state what the enable domain is. See the examples for more
--- information.
+-- explicitly state what the domain is. See the examples for more information.
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
 --
@@ -1212,16 +1212,16 @@ exposeSpecificClockResetEnable
   :: forall dom r
    . WithSpecificDomain dom r
   => (HiddenClockResetEnable dom => r)
-  -- ^ The component with hidden clock, reset, and enable arguments
+  -- ^ The function with hidden 'Clock', 'Reset', and 'Enable' arguments
   -> (KnownDomain dom => Clock dom -> Reset dom -> Enable dom -> r)
-  -- ^ The component with its clock, reset, and enable arguments exposed
+  -- ^ The component with its 'Clock', 'Reset', and 'Enable' arguments exposed
 exposeSpecificClockResetEnable =
   \f clk rst en ->
     exposeSpecificClock (exposeSpecificReset (exposeSpecificEnable f)) clk rst en
 {-# INLINE exposeSpecificClockResetEnable #-}
 #endif
 
--- -- | Hide the 'Clock', 'Reset' and 'Enable' arguments of a component, so they
+-- | Hide the 'Clock', 'Reset', and 'Enable' arguments of a component, so they
 -- can be routed implicitly.
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
@@ -1239,45 +1239,46 @@ hideClockResetEnable =
       (fromLabel @(HiddenEnableName dom))
 {-# INLINE hideClockResetEnable #-}
 
--- | Connect an explicit 'Clock', 'Reset', and 'Enable' to a function with a
--- hidden 'Clock', 'Reset', and 'Enable'.
---
+{- | Connect an explicit 'Clock', 'Reset', and 'Enable' to a function with a
+hidden 'Clock', 'Reset', and 'Enable'.
+
 #ifdef CLASH_MULTIPLE_HIDDEN
--- This function can only be used on components with a single domain. For
--- example, this function will refuse when:
---
--- @
--- r ~ HiddenClockResetEnable dom => Signal dom1 a -> Signal dom2 a
--- @
---
--- But will work when:
---
--- @
--- r ~ HiddenClockResetEnable dom => Signal dom a -> Signal dom a
--- @
---
--- If you want to connect a enable to a component working on multiple domains
--- (such as the first example), use 'withSpecificClockResetEnable'.
---
+This function can only be used on components with a single domain. For
+example, this function will refuse when:
+
+@
+r ~ HiddenClockResetEnable dom1 => Signal dom1 a -> Signal dom2 a
+@
+
+But will work when:
+
+@
+r ~ HiddenClockResetEnable dom => Signal dom a -> Signal dom a
+@
+
+If you want to connect a clock, reset, and enable to a component working on
+multiple domains (such as the first example), use
+'withSpecificClockResetEnable'.
+
 #endif
--- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
---
--- === __Example__
--- Usage with a _polymorphic_ domain:
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = withClockResetEnable clockGen resetGen enableGen reg
--- >>> sampleN @System 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
--- Force withClockResetEnable to work on signal (hence 'sampleN' not needing
--- an explicit domain later):
---
--- >>> reg = register 5 (reg + 1)
--- >>> sig = withClockResetEnable @System clockGen resetGen enableGen reg
--- >>> sampleN 10 sig
--- [5,5,6,7,8,9,10,11,12,13]
---
+<Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
+
+=== __Example__
+Usage with a /polymorphic/ domain:
+
+>>> reg = register 5 (reg + 1)
+>>> sig = withClockResetEnable clockGen resetGen enableGen reg
+>>> sampleN @System 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+
+Force 'withClockResetEnable' to work on 'System' (hence 'sampleN' not needing
+an explicit domain later):
+
+>>> reg = register 5 (reg + 1)
+>>> sig = withClockResetEnable @System clockGen resetGen enableGen reg
+>>> sampleN 10 sig
+[5,5,6,7,8,9,10,11,12,13]
+-}
 withClockResetEnable
   :: forall dom r
    . KnownDomain dom
@@ -1298,10 +1299,10 @@ withClockResetEnable =
   \clk rst en f -> withSpecificClockResetEnable clk rst en (const f) (Proxy @dom)
 {-# INLINE withClockResetEnable #-}
 
--- | Connect an explicit 'Clock', 'Reset', and 'Enable' to a function with a
--- hidden 'Clock', 'Reset', and 'Enable'. This function can be used on components
--- with multiple domains. As opposed to 'exposeClockResetEnable', callers should
--- explicitly state what the enable domain is. See the examples for more
+-- | Connect an explicit 'Clock', 'Reset', and 'Enable' to a function with
+-- hidden 'Clock', 'Reset', and 'Enable' arguments. This function can be used on
+-- components with multiple domains. As opposed to 'withClockResetEnable',
+-- callers should explicitly state what the domain is. See the examples for more
 -- information.
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks, resets, and enables>
@@ -1309,7 +1310,7 @@ withClockResetEnable =
 -- === __Example__
 -- 'withSpecificClockResetEnable' can only be used when it can find the
 -- specified domain in /r/:
---
+-- TODO: Actually use 'withSpecificClockResetEnable'
 -- >>> reg = register @System 5 (reg + 1)
 -- >>> sig = withClockResetEnable @System clockGen resetGen enableGen reg
 -- >>> sampleN 10 sig
@@ -1332,8 +1333,7 @@ withSpecificClockResetEnable
   -> Enable dom
   -- ^ The 'Enable' we want to connect
   -> (HiddenClockResetEnable dom => r)
-  -- ^ The function with a hidden 'Clock', hidden 'Reset', and hidden
-  -- 'Enable' argument
+  -- ^ The function with hidden 'Clock', 'Reset', and 'Enable' arguments
   -> r
 withSpecificClockResetEnable =
   \clk rst en f -> withSpecificClock clk (withSpecificReset rst (withSpecificEnable en f))
